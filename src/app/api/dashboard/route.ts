@@ -32,9 +32,9 @@ export async function GET(request: Request) {
       },
     });
 
-    const teamPerformance = users.map((u) => {
-      const completed = u.assignedTasks.filter((t) => t.status === "Completed").length;
-      const pending = u.assignedTasks.filter((t) => t.status !== "Completed").length;
+    const teamPerformance = users.map((u: any) => {
+      const completed = u.assignedTasks.filter((t: any) => t.status === "Completed").length;
+      const pending = u.assignedTasks.filter((t: any) => t.status !== "Completed").length;
       return {
         name: u.fullName,
         "Hoàn thành": completed,
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       },
     });
 
-    const recentActivity = comments.map((c) => ({
+    const recentActivity = comments.map((c: any) => ({
       id: c.id,
       user: c.user.fullName,
       avatar: c.user.avatarUrl,

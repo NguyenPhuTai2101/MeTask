@@ -190,7 +190,7 @@ export default function Dashboard() {
               </h3>
               <div className="h-[280px] w-full font-sans text-xs">
                 {mounted && (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 100, height: 100 }}>
                     <BarChart
                       data={performanceData}
                       margin={{ top: 10, right: 10, left: -20, bottom: 0 }}

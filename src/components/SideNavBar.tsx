@@ -67,10 +67,10 @@ export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
           <div className="flex items-center justify-between px-2 mb-2 lg:hidden">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg">
-                N
+                M
               </div>
               <span className="font-sans font-bold text-xl tracking-tight text-[#111c2d]">
-                Nexus<span className="text-primary">PM</span>
+                Me<span className="text-primary">Task</span>
               </span>
             </div>
             <button
@@ -120,7 +120,7 @@ export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
                 className="flex items-center justify-center gap-2 w-full bg-primary hover:bg-blue-700 text-white font-bold text-xs py-2.5 px-3 rounded-lg shadow-md shadow-blue-500/15 hover:shadow-blue-500/25 active:scale-95 transition-all duration-150"
               >
                 <span className="material-symbols-outlined text-[18px]">download</span>
-                Tải App NexusPM
+                Tải App MeTask
               </button>
             </div>
           )}
@@ -170,7 +170,7 @@ export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-base text-[#111c2d] flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">download</span>
-                Tải Ứng Dụng NexusPM
+                Tải Ứng Dụng MeTask
               </h3>
               <button
                 onClick={() => setShowInstructions(false)}

@@ -1,6 +1,6 @@
 {
-  "name": "NexusPM - Technical Task Manager",
-  "short_name": "NexusPM",
+  "name": "MeTask - Technical Task Manager",
+  "short_name": "MeTask",
   "description": "Hệ thống Quản lý Dự án & Tác vụ doanh nghiệp",
   "start_url": "/",
   "display": "standalone",

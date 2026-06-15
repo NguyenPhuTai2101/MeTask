@@ -8,13 +8,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "NexusPM - Technical Project Manager",
+  title: "MeTask - Technical Project Manager",
   description: "Hệ thống Quản lý Dự án & Tác vụ doanh nghiệp",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "NexusPM",
+    title: "MeTask",
   },
 };
 
