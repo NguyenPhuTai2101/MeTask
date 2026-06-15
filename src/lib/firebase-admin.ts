@@ -1,15 +1,34 @@
-import { getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
-// Automatically use the Client's Project ID if the Server-side one is not set on Vercel
-const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "metask-38f20";
+const projectId =
+  process.env.FIREBASE_PROJECT_ID ||
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+  "metask-38f20";
 
-if (!getApps().length) {
-  initializeApp({
-    projectId: projectId,
-  });
-}
+const JWKS = createRemoteJWKSet(
+  new URL(
+    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+  )
+);
 
-const adminAuth = getAuth();
+const adminAuth = {
+  verifyIdToken: async (token: string) => {
+    try {
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: `https://securetoken.google.com/${projectId}`,
+        audience: projectId,
+      });
+
+      return {
+        uid: payload.sub,
+        email: payload.email,
+        ...payload,
+      };
+    } catch (error) {
+      console.error("Token verification failed:", error);
+      throw new Error("Invalid token");
+    }
+  },
+};
 
 export { adminAuth };
