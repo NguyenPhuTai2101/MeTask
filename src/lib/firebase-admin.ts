@@ -18,10 +18,13 @@ const adminAuth = {
         issuer: `https://securetoken.google.com/${projectId}`,
         audience: projectId,
       });
+      if (!payload.sub) {
+        throw new Error("Invalid token: missing subject (uid)");
+      }
 
       return {
-        uid: payload.sub,
-        email: payload.email,
+        uid: payload.sub as string,
+        email: payload.email as string,
         ...payload,
       };
     } catch (error) {
