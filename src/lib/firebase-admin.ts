@@ -1,11 +1,12 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
-// Initialize Firebase Admin SDK using only the Project ID
-// This is sufficient for verifying client ID tokens using public keys
+// Automatically use the Client's Project ID if the Server-side one is not set on Vercel
+const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "metask-38f20";
+
 if (!getApps().length) {
   initializeApp({
-    projectId: process.env.FIREBASE_PROJECT_ID || "metask-38f20",
+    projectId: projectId,
   });
 }
 
