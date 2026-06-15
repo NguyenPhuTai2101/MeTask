@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 
 export async function POST(
   request: Request,
@@ -14,15 +15,33 @@ export async function POST(
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
-    const subtask = await prisma.subtask.create({
-      data: {
-        title,
-        isCompleted: false,
-        taskId,
-      },
+    const taskRef = doc(db, "tasks", taskId);
+    const taskDoc = await getDoc(taskRef);
+    if (!taskDoc.exists()) {
+      return NextResponse.json({ error: "Không tìm thấy tác vụ" }, { status: 404 });
+    }
+
+    const taskData = taskDoc.data();
+    const subtasks = taskData.subtasks || [];
+    const subtaskIds = taskData.subtaskIds || [];
+
+    const subtaskId = `subtask-${Date.now()}`;
+    const newSubtask = {
+      id: subtaskId,
+      title,
+      isCompleted: false,
+      taskId
+    };
+
+    subtasks.push(newSubtask);
+    subtaskIds.push(subtaskId);
+
+    await updateDoc(taskRef, {
+      subtasks,
+      subtaskIds
     });
 
-    return NextResponse.json(subtask, { status: 201 });
+    return NextResponse.json(newSubtask, { status: 201 });
   } catch (error) {
     console.error("Failed to create subtask:", error);
     return NextResponse.json({ error: "Failed to create subtask" }, { status: 500 });

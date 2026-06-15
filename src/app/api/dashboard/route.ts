@@ -1,69 +1,147 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { decryptSession } from "@/lib/session";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId");
+  let userId = searchParams.get("userId");
 
   try {
-    // 1. Projects Count
-    const activeProjectsCount = await prisma.project.count();
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("metask_session")?.value;
+    if (sessionCookie) {
+      const payload = decryptSession(sessionCookie);
+      if (payload) {
+        userId = payload.userId;
+      }
+    }
 
-    // 2. Pending Tasks (Status !== 'Completed')
-    const pendingTasksCount = await prisma.task.count({
-      where: {
-        status: {
-          not: "Completed",
-        },
-      },
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Resolve dbUser from email or id
+    let dbUser: any = null;
+    if (userId.includes("@")) {
+      const uSnapshot = await getDocs(query(collection(db, "users"), where("email", "==", userId.toLowerCase())));
+      if (!uSnapshot.empty) {
+        dbUser = uSnapshot.docs[0].data();
+      }
+    } else {
+      const uDoc = await getDoc(doc(db, "users", userId));
+      if (uDoc.exists()) {
+        dbUser = uDoc.data();
+      }
+    }
+
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const currentUserId = dbUser.id;
+
+    // Get project memberships to establish roles
+    const projectsRef = collection(db, "projects");
+    const membershipsSnapshot = await getDocs(query(projectsRef, where("memberIds", "array-contains", currentUserId)));
+
+    const pmProjectIds: string[] = [];
+    const memberProjectIds: string[] = [];
+
+    membershipsSnapshot.docs.forEach((doc) => {
+      const p = doc.data();
+      const member = p.members?.find((m: any) => m.userId === currentUserId);
+      if (member) {
+        if (member.role === "Project Manager") {
+          pmProjectIds.push(doc.id);
+        } else {
+          memberProjectIds.push(doc.id);
+        }
+      }
     });
 
-    // 3. Milestones (Mục tiêu hoàn thành - sử dụng số task đã completed làm chỉ số thành tựu)
-    const completedTasksCount = await prisma.task.count({
-      where: {
-        status: "Completed",
-      },
+    const visibleProjectIds = [...pmProjectIds, ...memberProjectIds];
+
+    // 1. Projects Count (projects where the user is a team member)
+    const activeProjectsCount = visibleProjectIds.length;
+
+    // 2 & 3. Tasks Metrics (Pending & Completed)
+    let pendingTasksCount = 0;
+    let completedTasksCount = 0;
+    
+    // Fetch all tasks for the projects the user can see
+    let allTasks: any[] = [];
+    if (visibleProjectIds.length > 0) {
+      const tasksSnapshot = await getDocs(query(collection(db, "tasks"), where("projectId", "in", visibleProjectIds)));
+      allTasks = tasksSnapshot.docs.map(t => t.data());
+    }
+
+    // Filter tasks based on role visibility
+    const visibleTasks = allTasks.filter((t) => {
+      const isPM = pmProjectIds.includes(t.projectId);
+      if (isPM) return true;
+      return t.assigneeId === currentUserId;
     });
 
-    // 4. Team Performance Chart Data (Số lượng task Hoàn thành vs Đang xử lý của mỗi User)
-    const users = await prisma.user.findMany({
-      include: {
-        assignedTasks: true,
-      },
+    pendingTasksCount = visibleTasks.filter((t) => t.status !== "Completed").length;
+    completedTasksCount = visibleTasks.filter((t) => t.status === "Completed").length;
+
+    // 4. Team Performance Chart Data
+    // Get unique user IDs of members in projects the current user can see
+    const visibleUserIds = new Set<string>();
+    membershipsSnapshot.docs.forEach((doc) => {
+      const p = doc.data();
+      p.memberIds?.forEach((uid: string) => visibleUserIds.add(uid));
     });
 
-    const teamPerformance = users.map((u: any) => {
-      const completed = u.assignedTasks.filter((t: any) => t.status === "Completed").length;
-      const pending = u.assignedTasks.filter((t: any) => t.status !== "Completed").length;
-      return {
-        name: u.fullName,
-        "Hoàn thành": completed,
-        "Đang xử lý": pending,
-      };
-    });
+    const teamPerformance: any[] = [];
+    for (const uid of Array.from(visibleUserIds)) {
+      const uDoc = await getDoc(doc(db, "users", uid));
+      if (uDoc.exists()) {
+        const uData = uDoc.data()!;
+        
+        // Count tasks assigned to this user that are visible to the current user
+        const userTasks = visibleTasks.filter((t) => t.assigneeId === uid);
+        const completed = userTasks.filter((t) => t.status === "Completed").length;
+        const pending = userTasks.filter((t) => t.status !== "Completed").length;
+        
+        teamPerformance.push({
+          name: uData.fullName,
+          "Hoàn thành": completed,
+          "Đang xử lý": pending,
+        });
+      }
+    }
 
-    // 5. Recent Activity (Lấy các bình luận mới nhất làm luồng hoạt động chính)
-    const comments = await prisma.comment.findMany({
-      take: 5,
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        user: true,
-        task: true,
-      },
-    });
+    // 5. Recent Activity (Filtered by task visibility)
+    const allComments: any[] = [];
+    for (const task of visibleTasks) {
+      const commentsRef = collection(db, "tasks", task.id, "comments");
+      const commentsSnapshot = await getDocs(commentsRef);
+      for (const cDoc of commentsSnapshot.docs) {
+        const cData = cDoc.data();
+        let commentUser = null;
+        if (cData.userId) {
+          const uDoc = await getDoc(doc(db, "users", cData.userId));
+          if (uDoc.exists()) commentUser = uDoc.data();
+        }
+        allComments.push({
+          id: cDoc.id,
+          user: commentUser ? commentUser.fullName : "Thành viên",
+          avatar: commentUser ? commentUser.avatarUrl : null,
+          action: "đã bình luận trong",
+          target: `${task.taskCode}: ${task.title}`,
+          time: cData.createdAt,
+          createdAt: cData.createdAt,
+        });
+      }
+    }
 
-    const recentActivity = comments.map((c: any) => ({
-      id: c.id,
-      user: c.user.fullName,
-      avatar: c.user.avatarUrl,
-      action: `đã bình luận trong`,
-      target: `${c.task.taskCode}: ${c.task.title}`,
-      time: c.createdAt.toISOString(),
-    }));
+    allComments.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    const recentActivity = allComments.slice(0, 5);
 
-    // Thêm log hoạt động giả định nếu chưa có bình luận nào
+    // Fallback activity if no comments exist
     if (recentActivity.length === 0) {
       recentActivity.push(
         {
@@ -71,7 +149,7 @@ export async function GET(request: Request) {
           user: "Nguyễn Văn A",
           avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
           action: "đã tạo dự án mới",
-          target: "NexusPM Development",
+          target: "MeTask Development",
           time: new Date(Date.now() - 3600000).toISOString(),
         },
         {
@@ -86,33 +164,37 @@ export async function GET(request: Request) {
     }
 
     // 6. My Tasks (Các task chưa hoàn thành được giao cho User hiện tại)
-    let myTasks: any[] = [];
-    if (userId) {
-      // Vì mockup lưu ID dạng string, nếu là placeholder trong Context, chúng ta map về email
-      // Đầu tiên lấy user thật từ database để lấy ID thật
-      const dbUser = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { id: userId },
-            { email: userId.includes("@") ? userId : undefined }, // Dự phòng nếu truyền email
-          ],
-        },
-      });
+    const myTasksRaw = visibleTasks.filter((t) => t.assigneeId === currentUserId && t.status !== "Completed");
+    
+    // Resolve project, module, and feature details for myTasks
+    const myTasks: any[] = [];
+    for (const task of myTasksRaw) {
+      let project = null;
+      const pDoc = await getDoc(doc(db, "projects", task.projectId));
+      if (pDoc.exists()) project = pDoc.data();
 
-      if (dbUser) {
-        myTasks = await prisma.task.findMany({
-          where: {
-            assigneeId: dbUser.id,
-            status: {
-              not: "Completed",
-            },
-          },
-          orderBy: {
-            dueDate: "asc",
-          },
-        });
+      let module = null;
+      if (task.moduleId) {
+        const mDoc = await getDoc(doc(db, "modules", task.moduleId));
+        if (mDoc.exists()) module = mDoc.data();
       }
+
+      let feature = null;
+      if (task.featureId) {
+        const fDoc = await getDoc(doc(db, "features", task.featureId));
+        if (fDoc.exists()) feature = fDoc.data();
+      }
+
+      myTasks.push({
+        ...task,
+        project,
+        module,
+        feature
+      });
     }
+
+    // Sort by dueDate asc
+    myTasks.sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
 
     return NextResponse.json({
       metrics: {

@@ -80,16 +80,53 @@ export default function TeamWorkload() {
     (m) => m.workloadPercentage > 100
   ) || [];
 
+  const handleExportCSV = () => {
+    if (!selectedProject) return;
+    let csvContent = "\uFEFF"; // UTF-8 BOM for Vietnamese character compatibility in Excel
+    csvContent += "Họ và Tên,Email,Vai Trò,Tải Trọng (%)\n";
+    
+    selectedProject.members.forEach((row) => {
+      csvContent += `"${row.user.fullName.replace(/"/g, '""')}","${row.user.email.replace(/"/g, '""')}","${row.role.replace(/"/g, '""')}",${row.workloadPercentage}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Bao_cao_tai_trong_${selectedProject.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header Panel */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#111c2d]">
-          Tải Trọng Đội Ngũ (Team Workload)
-        </h1>
-        <p className="text-sm text-slate-500 font-medium mt-1">
-          Theo dõi phân bổ công việc và công suất làm việc của các thành viên.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#111c2d]">
+            Tải Trọng Đội Ngũ (Team Workload)
+          </h1>
+          <p className="text-sm text-slate-500 font-medium mt-1">
+            Theo dõi phân bổ công việc và công suất làm việc của các thành viên.
+          </p>
+        </div>
+        <div className="flex gap-2 no-print">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-[#cfdaf2] text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg shadow-xs cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            Xuất CSV
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-[#cfdaf2] text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg shadow-xs cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px]">print</span>
+            In Báo Cáo PDF
+          </button>
+        </div>
       </div>
 
       {loading ? (

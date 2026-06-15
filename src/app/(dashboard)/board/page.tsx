@@ -26,6 +26,19 @@ interface Subtask {
   isCompleted: boolean;
 }
 
+interface Feature {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+interface Module {
+  id: string;
+  name: string;
+  description: string | null;
+  features: Feature[];
+}
+
 interface Task {
   id: string;
   taskCode: string;
@@ -38,6 +51,11 @@ interface Task {
   reporter: User | null;
   subtasks: Subtask[];
   comments: any[];
+  projectId: string;
+  moduleId: string | null;
+  featureId: string | null;
+  module?: { id: string; name: string } | null;
+  feature?: { id: string; name: string } | null;
 }
 
 interface Project {
@@ -45,6 +63,7 @@ interface Project {
   name: string;
   description: string | null;
   members: { user: User; role: string }[];
+  modules: Module[];
 }
 
 const COLUMNS = ["Backlog", "In Progress", "Review", "Completed"];
@@ -65,6 +84,8 @@ export default function KanbanBoard() {
   // Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<string>("All");
+  const [selectedModuleId, setSelectedModuleId] = useState<string>("All");
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string>("All");
 
   // Modal State
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -78,6 +99,8 @@ export default function KanbanBoard() {
     priority: "Medium",
     status: "Backlog",
     assigneeId: "",
+    moduleId: "",
+    featureId: "",
   });
 
   // Track online status & triggers sync
@@ -233,6 +256,8 @@ export default function KanbanBoard() {
       ...createForm,
       projectId: selectedProject.id,
       reporterId: selectedProject.members[0]?.user.id,
+      moduleId: createForm.moduleId || null,
+      featureId: createForm.featureId || null,
     };
 
     if (isOnline()) {
@@ -251,6 +276,8 @@ export default function KanbanBoard() {
             priority: "Medium",
             status: "Backlog",
             assigneeId: "",
+            moduleId: "",
+            featureId: "",
           });
           showNotification("Tác vụ mới", {
             body: `Đã tạo thành công tác vụ: ${requestBody.title}`,
@@ -277,6 +304,11 @@ export default function KanbanBoard() {
         reporter: selectedProject.members[0]?.user || null,
         subtasks: [],
         comments: [],
+        projectId: selectedProject.id,
+        moduleId: createForm.moduleId || null,
+        featureId: createForm.featureId || null,
+        module: createForm.moduleId ? { id: createForm.moduleId, name: selectedProject.modules.find(m => m.id === createForm.moduleId)?.name || "" } : null,
+        feature: createForm.featureId ? { id: createForm.featureId, name: selectedProject.modules.find(m => m.id === createForm.moduleId)?.features.find(f => f.id === createForm.featureId)?.name || "" } : null,
       };
       
       const newTasks = [...tasks, tempTask];
@@ -290,6 +322,8 @@ export default function KanbanBoard() {
         priority: "Medium",
         status: "Backlog",
         assigneeId: "",
+        moduleId: "",
+        featureId: "",
       });
       showNotification("Tác vụ ngoại tuyến", {
         body: `Đã lưu tạm tác vụ: ${createForm.title} (Sẽ đồng bộ khi có mạng)`,
@@ -303,7 +337,9 @@ export default function KanbanBoard() {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           task.taskCode.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPriority = selectedPriority === "All" || task.priority === selectedPriority;
-    return matchesSearch && matchesPriority;
+    const matchesModule = selectedModuleId === "All" || task.moduleId === selectedModuleId;
+    const matchesFeature = selectedFeatureId === "All" || task.featureId === selectedFeatureId;
+    return matchesSearch && matchesPriority && matchesModule && matchesFeature;
   });
 
   return (
@@ -336,12 +372,32 @@ export default function KanbanBoard() {
           <h1 className="text-2xl font-bold tracking-tight text-[#111c2d]">
             Bảng Công Việc (Kanban)
           </h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
-            Quản lý và kéo thả các tác vụ của dự án:{" "}
-            <span className="text-primary font-semibold">
-              {selectedProject?.name || "Đang tải..."}
-            </span>
-          </p>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className="text-sm text-slate-500 font-medium">Dự án:</span>
+            {projects.length > 0 ? (
+              <select
+                value={selectedProject?.id || ""}
+                onChange={(e) => {
+                  const proj = projects.find((p) => p.id === e.target.value);
+                  if (proj) {
+                    setSelectedProject(proj);
+                    setSelectedModuleId("All");
+                    setSelectedFeatureId("All");
+                    fetchTasks(proj.id);
+                  }
+                }}
+                className="bg-white border border-[#cfdaf2] text-slate-700 font-semibold text-sm py-1.5 px-3 rounded-lg shadow-xs cursor-pointer outline-none focus:border-primary"
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-sm text-slate-400 font-semibold">Đang tải dự án...</span>
+            )}
+          </div>
         </div>
 
         <button
@@ -354,7 +410,7 @@ export default function KanbanBoard() {
       </div>
 
       {/* Filter Options */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center bg-white p-4 rounded-xl border border-[#cfdaf2] shadow-sm">
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center bg-white p-4 rounded-xl border border-[#cfdaf2] shadow-sm">
         <div className="relative flex-1">
           <span className="material-symbols-outlined absolute left-3 top-2.5 text-[20px] text-slate-400">
             search
@@ -368,23 +424,67 @@ export default function KanbanBoard() {
           />
         </div>
 
-        <div className="flex gap-2 items-center">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wide mr-1 hidden md:block">
-            Độ ưu tiên:
-          </span>
-          {["All", "High", "Medium", "Low"].map((p) => (
-            <button
-              key={p}
-              onClick={() => setSelectedPriority(p)}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                selectedPriority === p
-                  ? "bg-primary border-primary text-white shadow-sm"
-                  : "border-[#cfdaf2] text-slate-600 hover:bg-slate-50 bg-white"
-              }`}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Module Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-505 uppercase tracking-wide text-slate-400">
+              Phân hệ:
+            </span>
+            <select
+              value={selectedModuleId}
+              onChange={(e) => {
+                setSelectedModuleId(e.target.value);
+                setSelectedFeatureId("All");
+              }}
+              className="bg-white border border-[#cfdaf2] text-slate-600 text-xs font-semibold py-1.5 px-2.5 rounded-lg outline-none focus:border-primary cursor-pointer shadow-xs"
             >
-              {p === "All" ? "Tất cả" : p}
-            </button>
-          ))}
+              <option value="All">Tất cả</option>
+              {selectedProject?.modules?.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Feature Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-505 uppercase tracking-wide text-slate-400">
+              Chức năng:
+            </span>
+            <select
+              value={selectedFeatureId}
+              onChange={(e) => setSelectedFeatureId(e.target.value)}
+              disabled={selectedModuleId === "All"}
+              className="bg-white border border-[#cfdaf2] text-slate-600 text-xs font-semibold py-1.5 px-2.5 rounded-lg outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+            >
+              <option value="All">Tất cả</option>
+              {selectedProject?.modules
+                ?.find((m) => m.id === selectedModuleId)
+                ?.features?.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* Priority Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-505 uppercase tracking-wide text-slate-400">
+              Ưu tiên:
+            </span>
+            <select
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
+              className="bg-white border border-[#cfdaf2] text-slate-600 text-xs font-semibold py-1.5 px-2.5 rounded-lg outline-none focus:border-primary cursor-pointer shadow-xs"
+            >
+              <option value="All">Tất cả</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -486,6 +586,47 @@ export default function KanbanBoard() {
                   onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                   className="w-full border border-[#cfdaf2] rounded-lg p-3 outline-none focus:border-primary placeholder-slate-400 bg-slate-50/50 focus:bg-white"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
+                    Phân hệ (Module)
+                  </label>
+                  <select
+                    value={createForm.moduleId}
+                    onChange={(e) => setCreateForm({ ...createForm, moduleId: e.target.value, featureId: "" })}
+                    className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700"
+                  >
+                    <option value="">Không có</option>
+                    {selectedProject.modules?.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
+                    Chức năng (Feature)
+                  </label>
+                  <select
+                    value={createForm.featureId}
+                    onChange={(e) => setCreateForm({ ...createForm, featureId: e.target.value })}
+                    disabled={!createForm.moduleId}
+                    className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Không có</option>
+                    {selectedProject.modules
+                      ?.find((m) => m.id === createForm.moduleId)
+                      ?.features?.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -667,10 +808,17 @@ function TaskCard({ task, onClick }: CardProps) {
       </div>
 
       <div onClick={onClick} className="cursor-pointer group flex flex-col gap-1">
-        <span className="text-[10px] font-mono text-slate-400 font-bold leading-none">
-          {task.taskCode}
-        </span>
-        <h4 className="font-bold text-sm text-[#111c2d] leading-snug group-hover:text-primary transition-colors">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-mono text-slate-400 font-bold leading-none">
+            {task.taskCode}
+          </span>
+          {(task.module || task.feature) && (
+            <span className="text-[9px] font-bold text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded leading-none border border-blue-100/70">
+              {task.module?.name} {task.feature ? `/ ${task.feature.name}` : ""}
+            </span>
+          )}
+        </div>
+        <h4 className="font-bold text-sm text-[#111c2d] leading-snug group-hover:text-primary transition-colors mt-1">
           {task.title}
         </h4>
       </div>

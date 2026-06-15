@@ -27,3 +27,36 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+@media print {
+  header,
+  aside,
+  footer,
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  
+  main {
+    padding-left: 0 !important;
+    padding-top: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    min-height: 0 !important;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  .card, 
+  .chart-container,
+  .print-page-break-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+}

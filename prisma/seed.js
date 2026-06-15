@@ -2,11 +2,18 @@ require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 const { Pool } = require("pg");
+const crypto = require("crypto");
 
 const connectionString = process.env.DATABASE_URL;
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
+
+function hashPassword(password) {
+  const salt = "metask_salt";
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
+  return `${salt}:${hash}`;
+}
 
 async function main() {
   console.log("Starting database seeding...");
@@ -16,6 +23,8 @@ async function main() {
   await prisma.subtask.deleteMany({});
   await prisma.task.deleteMany({});
   await prisma.teamMember.deleteMany({});
+  await prisma.feature.deleteMany({});
+  await prisma.module.deleteMany({});
   await prisma.project.deleteMany({});
   await prisma.user.deleteMany({});
 
@@ -27,6 +36,7 @@ async function main() {
       fullName: "Nguyễn Văn A",
       email: "vana@nexuspm.com",
       avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+      passwordHash: hashPassword("password123"),
     },
   });
 
@@ -35,6 +45,7 @@ async function main() {
       fullName: "Trần Thị B",
       email: "thib@nexuspm.com",
       avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+      passwordHash: hashPassword("password123"),
     },
   });
 
@@ -43,6 +54,7 @@ async function main() {
       fullName: "Lê Hoàng C",
       email: "hoangc@nexuspm.com",
       avatarUrl: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&auto=format&fit=crop&q=80",
+      passwordHash: hashPassword("password123"),
     },
   });
 
@@ -57,6 +69,52 @@ async function main() {
   });
 
   console.log("Created project.");
+
+  // Create Modules
+  const moduleAuth = await prisma.module.create({
+    data: {
+      name: "Xác thực người dùng",
+      description: "Quản lý đăng nhập, đăng ký và phân quyền.",
+      projectId: project.id,
+    },
+  });
+
+  const moduleBoard = await prisma.module.create({
+    data: {
+      name: "Bảng công việc",
+      description: "Kanban board kéo thả quản lý trạng thái task.",
+      projectId: project.id,
+    },
+  });
+
+  console.log("Created modules.");
+
+  // Create Features
+  const featureLogin = await prisma.feature.create({
+    data: {
+      name: "Đăng nhập",
+      description: "Chức năng đăng nhập tài khoản thực tế sử dụng JWT.",
+      moduleId: moduleAuth.id,
+    },
+  });
+
+  const featureRegister = await prisma.feature.create({
+    data: {
+      name: "Đăng ký",
+      description: "Chức năng đăng ký tài khoản mới lưu vào DB.",
+      moduleId: moduleAuth.id,
+    },
+  });
+
+  const featureDnd = await prisma.feature.create({
+    data: {
+      name: "Kéo thả thẻ",
+      description: "Kéo thả thẻ task giữa các cột trạng thái.",
+      moduleId: moduleBoard.id,
+    },
+  });
+
+  console.log("Created features.");
 
   // Assign Team Members with workloads
   await prisma.teamMember.create({
@@ -88,7 +146,7 @@ async function main() {
 
   console.log("Created team members & workloads.");
 
-  // Create Tasks
+  // Create Tasks linked to modules/features
   // Task 1: Design system (In Progress)
   const task1 = await prisma.task.create({
     data: {
@@ -101,6 +159,8 @@ async function main() {
       projectId: project.id,
       assigneeId: userB.id,
       reporterId: userA.id,
+      moduleId: moduleBoard.id,
+      featureId: featureDnd.id,
     },
   });
 
@@ -116,6 +176,8 @@ async function main() {
       projectId: project.id,
       assigneeId: userC.id,
       reporterId: userA.id,
+      moduleId: moduleAuth.id,
+      featureId: featureRegister.id,
     },
   });
 
@@ -131,6 +193,8 @@ async function main() {
       projectId: project.id,
       assigneeId: userC.id,
       reporterId: userB.id,
+      moduleId: moduleAuth.id,
+      featureId: featureRegister.id,
     },
   });
 
@@ -146,6 +210,8 @@ async function main() {
       projectId: project.id,
       assigneeId: userC.id,
       reporterId: userA.id,
+      moduleId: moduleBoard.id,
+      featureId: featureDnd.id,
     },
   });
 

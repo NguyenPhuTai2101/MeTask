@@ -32,6 +32,19 @@ interface Task {
   status: string;
   priority: string;
   dueDate: string | null;
+  projectId: string;
+  project?: {
+    id: string;
+    name: string;
+  };
+  module?: {
+    id: string;
+    name: string;
+  } | null;
+  feature?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export default function Dashboard() {
@@ -115,16 +128,52 @@ export default function Dashboard() {
     return date.toLocaleDateString("vi-VN");
   };
 
+  const handleExportCSV = () => {
+    let csvContent = "\uFEFF"; // UTF-8 BOM for Vietnamese character compatibility in Excel
+    csvContent += "Họ và Tên,Hoàn thành,Đang xử lý\n";
+    
+    performanceData.forEach((row) => {
+      csvContent += `"${row.name.replace(/"/g, '""')}",${row["Hoàn thành"]},${row["Đang xử lý"]}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Bao_cao_hieu_suat_MeTask_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* Title Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#111c2d]">
-          Chào buổi sáng, {user?.fullName || "Thành viên"}!
-        </h1>
-        <p className="text-sm text-slate-500 font-medium mt-1">
-          Dưới đây là tổng quan hiệu suất dự án và công việc cá nhân của bạn hôm nay.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#111c2d]">
+            Chào buổi sáng, {user?.fullName || "Thành viên"}!
+          </h1>
+          <p className="text-sm text-slate-500 font-medium mt-1">
+            Dưới đây là tổng quan hiệu suất dự án và công việc cá nhân của bạn hôm nay.
+          </p>
+        </div>
+        <div className="flex gap-2 no-print">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-[#cfdaf2] text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg shadow-xs cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            Xuất CSV
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-[#cfdaf2] text-slate-700 font-semibold text-xs py-2 px-3 rounded-lg shadow-xs cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[16px]">print</span>
+            In Báo Cáo PDF
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -249,38 +298,73 @@ export default function Dashboard() {
               </span>
             </div>
 
-            <div className="flex flex-col gap-2">
-              {myTasks.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors group"
-                >
-                  <label className="flex items-center gap-3 cursor-pointer flex-1">
-                    <input
-                      type="checkbox"
-                      onChange={(e) => handleToggleTask(t.id, e.target.checked)}
-                      className="rounded border-[#cfdaf2] text-primary focus:ring-primary h-4.5 w-4.5"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-mono font-bold text-slate-400 leading-none">
-                        {t.taskCode}
-                      </span>
-                      <span className="font-bold text-sm text-[#111c2d] mt-1 group-hover:text-primary transition-colors">
-                        {t.title}
-                      </span>
+            <div className="flex flex-col gap-4">
+              {(() => {
+                const groupedTasks: Record<string, { projectName: string; tasks: Task[] }> = {};
+                myTasks.forEach((t) => {
+                  const pId = t.projectId || "other";
+                  const pName = t.project?.name || "Khác";
+                  if (!groupedTasks[pId]) {
+                    groupedTasks[pId] = {
+                      projectName: pName,
+                      tasks: [],
+                    };
+                  }
+                  groupedTasks[pId].tasks.push(t);
+                });
+
+                return Object.keys(groupedTasks).map((pId) => {
+                  const group = groupedTasks[pId];
+                  return (
+                    <div key={pId} className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded border border-slate-200/60 mt-1">
+                        <span className="material-symbols-outlined text-[16px] text-slate-400">folder_open</span>
+                        Dự án: {group.projectName}
+                      </div>
+                      <div className="flex flex-col gap-2 pl-2 border-l border-slate-100">
+                        {group.tasks.map((t) => (
+                          <div
+                            key={t.id}
+                            className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors group"
+                          >
+                            <label className="flex items-center gap-3 cursor-pointer flex-1">
+                              <input
+                                type="checkbox"
+                                onChange={(e) => handleToggleTask(t.id, e.target.checked)}
+                                className="rounded border-[#cfdaf2] text-primary focus:ring-primary h-4.5 w-4.5"
+                              />
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[10px] font-mono font-bold text-slate-400 leading-none">
+                                    {t.taskCode}
+                                  </span>
+                                  {(t.module || t.feature) && (
+                                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded leading-none border border-blue-100/70">
+                                      {t.module?.name} {t.feature ? `/ ${t.feature.name}` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-bold text-sm text-[#111c2d] mt-1 group-hover:text-primary transition-colors">
+                                  {t.title}
+                                </span>
+                              </div>
+                            </label>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              t.priority === "High"
+                                ? "bg-red-50 text-red-600 border border-red-100"
+                                : t.priority === "Medium"
+                                ? "bg-amber-50 text-amber-600 border border-amber-100"
+                                : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                            }`}>
+                              {t.priority}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </label>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                    t.priority === "High"
-                      ? "bg-red-50 text-red-600 border border-red-100"
-                      : t.priority === "Medium"
-                      ? "bg-amber-50 text-amber-600 border border-amber-100"
-                      : "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                  }`}>
-                    {t.priority}
-                  </span>
-                </div>
-              ))}
+                  );
+                });
+              })()}
               {myTasks.length === 0 && (
                 <div className="border border-dashed border-[#cfdaf2]/40 rounded-lg p-8 text-center text-slate-400 text-sm py-10 font-sans">
                   Tuyệt vời! Bạn đã hoàn thành toàn bộ các tác vụ được giao.

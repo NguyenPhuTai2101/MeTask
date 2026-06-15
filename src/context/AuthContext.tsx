@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 
 export interface UserSession {
   id: string;
@@ -13,81 +15,150 @@ export interface UserSession {
 interface AuthContextType {
   user: UserSession | null;
   loading: boolean;
-  login: (email: string) => Promise<boolean>;
-  logout: () => void;
+  login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, fullName: string, password?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Mock users list matching database seed data
-export const MOCK_USERS: UserSession[] = [
-  {
-    id: "user-a-id-placeholder", // Will match seed user id or fallback
-    email: "vana@nexuspm.com",
-    fullName: "Nguyễn Văn A",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-    role: "Project Manager",
-  },
-  {
-    id: "user-b-id-placeholder",
-    email: "thib@nexuspm.com",
-    fullName: "Trần Thị B",
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-    role: "Lead Designer",
-  },
-  {
-    id: "user-c-id-placeholder",
-    email: "hoangc@nexuspm.com",
-    fullName: "Lê Hoàng C",
-    avatarUrl: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&auto=format&fit=crop&q=80",
-    role: "Frontend Developer",
-  },
-];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for existing session (supports PWA offline session)
-    const storedUser = localStorage.getItem("nexuspm_session");
-    if (storedUser) {
+    async function initAuth() {
       try {
-        setUser(JSON.parse(storedUser));
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem("nexuspm_session", JSON.stringify(data.user));
+        } else {
+          // If server says no session, check if there is an offline cache
+          const storedUser = localStorage.getItem("nexuspm_session");
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          }
+        }
       } catch (e) {
-        console.error("Failed to parse stored session", e);
+        console.error("Failed to initialize session, using offline cache if exists", e);
+        const storedUser = localStorage.getItem("nexuspm_session");
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch (_) {}
+        }
+      } finally {
+        setLoading(false);
       }
-    } else {
-      // Default log in as User A (Project Manager) for preview convenience
-      setUser(MOCK_USERS[0]);
-      localStorage.setItem("nexuspm_session", JSON.stringify(MOCK_USERS[0]));
     }
-    setLoading(false);
+
+    initAuth();
   }, []);
 
-  const login = async (email: string): Promise<boolean> => {
+  const login = async (email: string, password = "password123"): Promise<{ success: boolean; error?: string }> => {
     setLoading(true);
-    // Simulate API request delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    
-    const matched = MOCK_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (matched) {
-      setUser(matched);
-      localStorage.setItem("nexuspm_session", JSON.stringify(matched));
+    try {
+      // 1. Sign in with Firebase Auth client side
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      // 2. Get ID Token
+      const token = await firebaseUser.getIdToken();
+      
+      // 3. Post to API to set session cookie
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setUser(data.user);
+        localStorage.setItem("nexuspm_session", JSON.stringify(data.user));
+        setLoading(false);
+        return { success: true };
+      } else {
+        setLoading(false);
+        return { success: false, error: data.error || "Đăng nhập thất bại" };
+      }
+    } catch (err: any) {
       setLoading(false);
-      return true;
+      let errorMsg = "Đăng nhập thất bại";
+      if (
+        err.code === "auth/user-not-found" || 
+        err.code === "auth/wrong-password" || 
+        err.code === "auth/invalid-credential" ||
+        err.code === "auth/invalid-email"
+      ) {
+        errorMsg = "Email hoặc mật khẩu không chính xác";
+      }
+      return { success: false, error: errorMsg };
     }
-    setLoading(false);
-    return false;
   };
 
-  const logout = () => {
+  const register = async (
+    email: string,
+    fullName: string,
+    password = "password123",
+    role = "Member"
+  ): Promise<{ success: boolean; error?: string }> => {
+    setLoading(true);
+    try {
+      // 1. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      // 2. Get ID Token
+      const token = await firebaseUser.getIdToken();
+      
+      // 3. Post to API to save profile in Firestore and set session cookie
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email, fullName, role }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setUser(data.user);
+        localStorage.setItem("nexuspm_session", JSON.stringify(data.user));
+        setLoading(false);
+        return { success: true };
+      } else {
+        setLoading(false);
+        return { success: false, error: data.error || "Đăng ký thất bại" };
+      }
+    } catch (err: any) {
+      setLoading(false);
+      let errorMsg = "Đăng ký thất bại";
+      if (err.code === "auth/email-already-in-use") {
+        errorMsg = "Email này đã được sử dụng";
+      } else if (err.code === "auth/weak-password") {
+        errorMsg = "Mật khẩu quá yếu (tối thiểu 6 ký tự)";
+      }
+      return { success: false, error: errorMsg };
+    }
+  };
+
+  const logout = async () => {
     setUser(null);
     localStorage.removeItem("nexuspm_session");
+    try {
+      await signOut(auth);
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+      console.error("Failed to notify logout to server", e);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

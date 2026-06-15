@@ -25,6 +25,15 @@ interface Comment {
   user: User;
 }
 
+interface TimeLog {
+  id: string;
+  startTime: string;
+  endTime: string | null;
+  duration: number | null;
+  notes: string | null;
+  user: User;
+}
+
 interface Task {
   id: string;
   taskCode: string;
@@ -39,6 +48,21 @@ interface Task {
   reporterId?: string | null;
   subtasks: Subtask[];
   comments: Comment[];
+  projectId: string;
+  project?: {
+    id: string;
+    name: string;
+  };
+  moduleId?: string | null;
+  featureId?: string | null;
+  module?: {
+    id: string;
+    name: string;
+  } | null;
+  feature?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 interface TaskDetailModalProps {
@@ -64,6 +88,13 @@ export default function TaskDetailModal({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newCommentContent, setNewCommentContent] = useState("");
 
+  // Time Tracking States
+  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
+  const [activeTimer, setActiveTimer] = useState<any | null>(null);
+  const [timerDuration, setTimerDuration] = useState(0);
+  const [stopNotes, setStopNotes] = useState("");
+  const [showStopForm, setShowStopForm] = useState(false);
+
   // TipTap Rich Text Editor setup
   const editor = useEditor({
     extensions: [StarterKit],
@@ -75,24 +106,22 @@ export default function TaskDetailModal({
     },
   });
 
-  // Fetch task details when taskId changes
+  // Fetch task details and time logs when taskId changes
   useEffect(() => {
     if (!taskId || !isOpen) return;
 
     const fetchTaskDetails = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/tasks`);
+        const res = await fetch(`/api/tasks/${taskId}`);
         if (res.ok) {
-          const tasks: Task[] = await res.json();
-          const found = tasks.find((t) => t.id === taskId);
-          if (found) {
-            setTask(found);
-            if (editor) {
-              editor.commands.setContent(found.description || "");
-            }
+          const found: Task = await res.json();
+          setTask(found);
+          if (editor) {
+            editor.commands.setContent(found.description || "");
           }
         }
+        fetchTimeLogs();
       } catch (e) {
         console.error("Failed to fetch task details:", e);
       } finally {
@@ -102,6 +131,73 @@ export default function TaskDetailModal({
 
     fetchTaskDetails();
   }, [taskId, isOpen, editor]);
+
+  // Active Timer counting Effect
+  useEffect(() => {
+    let interval: any;
+    if (activeTimer) {
+      const startTime = new Date(activeTimer.startTime).getTime();
+      interval = setInterval(() => {
+        setTimerDuration(Math.round((Date.now() - startTime) / 1000));
+      }, 1000);
+    } else {
+      setTimerDuration(0);
+    }
+    return () => clearInterval(interval);
+  }, [activeTimer]);
+
+  const fetchTimeLogs = async () => {
+    if (!taskId) return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/time-logs`);
+      if (res.ok) {
+        const data = await res.json();
+        setTimeLogs(data.logs);
+        setActiveTimer(data.activeTimer);
+        if (data.activeTimer) {
+          const start = new Date(data.activeTimer.startTime).getTime();
+          setTimerDuration(Math.round((Date.now() - start) / 1000));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch time logs", e);
+    }
+  };
+
+  const handleStartTimer = async () => {
+    if (!task) return;
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/time-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start" }),
+      });
+      if (res.ok) {
+        fetchTimeLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleStopTimer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!task) return;
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/time-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "stop", notes: stopNotes }),
+      });
+      if (res.ok) {
+        setStopNotes("");
+        setShowStopForm(false);
+        fetchTimeLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   if (!isOpen || !task) return null;
 
@@ -243,10 +339,17 @@ export default function TaskDetailModal({
         {/* Header Section */}
         <div className="h-16 px-6 border-b border-[#cfdaf2] flex items-center justify-between bg-slate-50/50">
           <div className="flex flex-col">
-            <span className="text-[10px] font-sans font-semibold text-slate-400 tracking-wider uppercase">
-              Dự án / {task.taskCode}
-            </span>
-            <h2 className="text-sm font-bold text-[#111c2d] truncate max-w-md">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-sans font-semibold text-slate-400 tracking-wider uppercase">
+                {task.project?.name || "Dự án"} / {task.taskCode}
+              </span>
+              {(task.module || task.feature) && (
+                <span className="text-[9px] font-bold text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded leading-none border border-blue-100/70">
+                  {task.module?.name} {task.feature ? `/ ${task.feature.name}` : ""}
+                </span>
+              )}
+            </div>
+            <h2 className="text-sm font-bold text-[#111c2d] truncate max-w-md mt-0.5">
               {task.title}
             </h2>
           </div>
@@ -336,6 +439,115 @@ export default function TaskDetailModal({
                   </button>
                 </div>
                 <EditorContent editor={editor} />
+              </div>
+
+              {/* Time Tracking Widget */}
+              <div className="flex flex-col gap-3 p-4 rounded-xl bg-slate-50 border border-[#cfdaf2]/50">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[#111c2d] uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[18px] text-slate-500">schedule</span>
+                    Bấm giờ làm việc
+                  </h3>
+                  
+                  {/* Timer display */}
+                  {activeTimer ? (
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                      <span className="font-mono text-sm font-bold text-slate-700">
+                        {(() => {
+                          const h = Math.floor(timerDuration / 3600);
+                          const m = Math.floor((timerDuration % 3600) / 60);
+                          const s = timerDuration % 60;
+                          return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+                        })()}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Timer Controls */}
+                {!activeTimer ? (
+                  <button
+                    onClick={handleStartTimer}
+                    className="flex items-center justify-center gap-1.5 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-md active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    Bắt đầu thực hiện (Start Timer)
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {!showStopForm ? (
+                      <button
+                        onClick={() => setShowStopForm(true)}
+                        className="flex items-center justify-center gap-1.5 w-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-md active:scale-95 transition-all cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">stop</span>
+                        Dừng làm việc (Stop Timer)
+                      </button>
+                    ) : (
+                      <form onSubmit={handleStopTimer} className="flex flex-col gap-2 bg-white p-3 border border-red-100 rounded-lg">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Ghi chú việc đã làm</label>
+                        <input
+                          type="text"
+                          placeholder="Ví dụ: Fix bug CSS, code API..."
+                          value={stopNotes}
+                          onChange={(e) => setStopNotes(e.target.value)}
+                          className="h-9 w-full rounded-lg border border-[#cfdaf2] px-2 text-xs outline-none focus:border-red-500"
+                          required
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowStopForm(false)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold text-[10px] py-1.5 px-3 rounded-lg"
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="submit"
+                            className="bg-red-600 hover:bg-red-700 text-white font-semibold text-[10px] py-1.5 px-3 rounded-lg"
+                          >
+                            Lưu & Dừng
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {/* Log history list */}
+                {timeLogs.length > 0 && (
+                  <div className="mt-2 border-t border-slate-200/60 pt-3">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Nhật ký hoạt động</h4>
+                    <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
+                      {timeLogs.map((log) => (
+                        <div key={log.id} className="flex justify-between items-start text-[11px] p-2 bg-white border border-slate-100 rounded-lg">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-bold text-slate-700">{log.user.fullName}</span>
+                            <span className="text-slate-400 text-[9px]">
+                              {new Date(log.startTime).toLocaleDateString("vi-VN", {
+                                month: "numeric",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              })} - {log.notes}
+                            </span>
+                          </div>
+                          <span className="font-mono font-bold text-slate-500">
+                            {log.duration ? (
+                              (() => {
+                                const h = Math.floor(log.duration / 3600);
+                                const m = Math.floor((log.duration % 3600) / 60);
+                                if (h > 0) return `${h}h ${m}m`;
+                                return `${m}m`;
+                              })()
+                            ) : "Đang chạy"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Subtasks Section */}

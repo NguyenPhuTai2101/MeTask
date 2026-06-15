@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth, MOCK_USERS } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 interface SideNavBarProps {
@@ -13,14 +13,16 @@ interface SideNavBarProps {
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: "space_dashboard" },
-  { label: "Project Board", href: "/board", icon: "view_kanban" },
-  { label: "Team Workload", href: "/workload", icon: "group" },
-  { label: "Settings", href: "/settings", icon: "settings" },
+  { label: "Bảng Công Việc", href: "/board", icon: "view_kanban" },
+  { label: "Dự Án & Đội Ngũ", href: "/projects", icon: "folder_open" },
+  { label: "Lịch Biểu & Gantt", href: "/calendar", icon: "calendar_month" },
+  { label: "Tải Trọng Đội Ngũ", href: "/workload", icon: "group" },
+  { label: "Cài Đặt PWA", href: "/settings", icon: "settings" },
 ];
 
 export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
   const pathname = usePathname();
-  const { user, login } = useAuth();
+  const { user, logout } = useAuth();
   const { isInstallable, triggerInstall } = usePWAInstall();
   
   // Local state for standalone mode and instructions popup
@@ -37,10 +39,8 @@ export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
   }, []);
 
   const handleInstallClick = async () => {
-    // Thử gọi prompt tự động của trình duyệt
     const success = await triggerInstall();
     if (!success) {
-      // Nếu không khả dụng (do browser chưa bắt được event hoặc Safari iOS), hiện popup hướng dẫn
       setShowInstructions(true);
     }
   };
@@ -110,14 +110,14 @@ export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
           </nav>
         </div>
 
-        {/* Action Panel: PWA Install and User Switcher */}
+        {/* Action Panel: PWA Install and Logout */}
         <div className="mt-auto flex flex-col gap-4">
-          {/* PWA Install Button (Always visible if running in browser to maximize exposure) */}
+          {/* PWA Install Button */}
           {!isStandalone && (
             <div className="px-2">
               <button
                 onClick={handleInstallClick}
-                className="flex items-center justify-center gap-2 w-full bg-primary hover:bg-blue-700 text-white font-bold text-xs py-2.5 px-3 rounded-lg shadow-md shadow-blue-500/15 hover:shadow-blue-500/25 active:scale-95 transition-all duration-150"
+                className="flex items-center justify-center gap-2 w-full bg-primary hover:bg-blue-700 text-white font-bold text-xs py-2.5 px-3 rounded-lg shadow-md shadow-blue-500/15 hover:shadow-blue-500/25 active:scale-95 transition-all duration-150 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">download</span>
                 Tải App MeTask
@@ -125,40 +125,18 @@ export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
             </div>
           )}
 
-          {/* User Switcher (For testing and easy demo) */}
+          {/* Logout Button */}
           <div className="border-t border-[#cfdaf2] pt-4">
-            <div className="px-2 mb-3">
-              <p className="text-[11px] font-sans font-semibold tracking-wider text-slate-400 uppercase">
-                Chuyển Thành Viên
-              </p>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {MOCK_USERS.map((mockUser) => {
-                const isCurrent = user?.email === mockUser.email;
-                return (
-                  <button
-                    key={mockUser.email}
-                    onClick={() => login(mockUser.email)}
-                    className={`flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium transition-all duration-150 ${
-                      isCurrent
-                        ? "bg-slate-200/60 text-[#111c2d] ring-1 ring-slate-300"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={mockUser.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"}
-                      alt={mockUser.fullName}
-                      className="w-5.5 h-5.5 rounded-full object-cover border border-white"
-                    />
-                    <div className="truncate flex-1">
-                      <p className="font-semibold truncate">{mockUser.fullName}</p>
-                      <p className="text-[9px] text-slate-400 leading-none truncate">{mockUser.role}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              onClick={async () => {
+                await logout();
+                window.location.href = "/login";
+              }}
+              className="flex items-center justify-center gap-2 w-full bg-white hover:bg-red-50 hover:text-red-600 text-slate-600 font-bold text-xs py-2.5 px-3 rounded-lg border border-[#cfdaf2] shadow-xs active:scale-95 transition-all duration-150 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">logout</span>
+              Đăng xuất
+            </button>
           </div>
         </div>
       </aside>
