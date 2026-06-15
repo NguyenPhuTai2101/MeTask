@@ -9,6 +9,7 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  serverExternalPackages: ["firebase-admin"]
 };
 
 export default withPWA(nextConfig);
