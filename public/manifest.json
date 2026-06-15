@@ -1,0 +1,17 @@
+{
+  "name": "NexusPM - Technical Task Manager",
+  "short_name": "NexusPM",
+  "description": "Hệ thống Quản lý Dự án & Tác vụ doanh nghiệp",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f9ff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "32x32 48x48 64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
