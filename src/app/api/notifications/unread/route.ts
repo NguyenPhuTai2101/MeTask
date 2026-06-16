@@ -2,16 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getCountFromServer } from "firebase/firestore";
-import { decryptSession } from "@/lib/session";
+import { getSessionUser } from "@/lib/session";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("metask_session")?.value;
-    if (!sessionCookie) {
-      return NextResponse.json({ count: 0 });
-    }
-    const session = decryptSession(sessionCookie);
+    const session = await getSessionUser();
     if (!session) {
       return NextResponse.json({ count: 0 });
     }

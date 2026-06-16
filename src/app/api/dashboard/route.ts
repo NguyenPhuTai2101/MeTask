@@ -2,20 +2,16 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
-import { decryptSession } from "@/lib/session";
+import { getSessionUser } from "@/lib/session";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   let userId = searchParams.get("userId");
 
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("metask_session")?.value;
-    if (sessionCookie) {
-      const payload = decryptSession(sessionCookie);
-      if (payload) {
-        userId = payload.userId;
-      }
+    const payload = await getSessionUser();
+    if (payload) {
+      userId = payload.userId;
     }
 
     if (!userId) {
@@ -70,11 +66,22 @@ export async function GET(request: Request) {
     let pendingTasksCount = 0;
     let completedTasksCount = 0;
     
-    // Fetch all tasks for the projects the user can see
+    // Fetch all tasks for the projects the user can see (handling max 10 for 'in' query)
     let allTasks: any[] = [];
     if (visibleProjectIds.length > 0) {
-      const tasksSnapshot = await getDocs(query(collection(db, "tasks"), where("projectId", "in", visibleProjectIds)));
-      allTasks = tasksSnapshot.docs.map(t => t.data());
+      const chunks = [];
+      for (let i = 0; i < visibleProjectIds.length; i += 10) {
+        chunks.push(visibleProjectIds.slice(i, i + 10));
+      }
+      
+      const chunkPromises = chunks.map(chunk => 
+        getDocs(query(collection(db, "tasks"), where("projectId", "in", chunk)))
+      );
+      
+      const chunkSnapshots = await Promise.all(chunkPromises);
+      chunkSnapshots.forEach(snap => {
+        allTasks.push(...snap.docs.map(t => t.data()));
+      });
     }
 
     // Filter tasks based on role visibility
@@ -96,10 +103,13 @@ export async function GET(request: Request) {
     });
 
     const teamPerformance: any[] = [];
-    for (const uid of Array.from(visibleUserIds)) {
-      const uDoc = await getDoc(doc(db, "users", uid));
+    const teamPromises = Array.from(visibleUserIds).map(uid => getDoc(doc(db, "users", uid)));
+    const teamSnapshots = await Promise.all(teamPromises);
+    
+    teamSnapshots.forEach((uDoc) => {
       if (uDoc.exists()) {
         const uData = uDoc.data()!;
+        const uid = uDoc.id;
         
         // Count tasks assigned to this user that are visible to the current user
         const userTasks = visibleTasks.filter((t) => t.assigneeId === uid);
@@ -112,86 +122,81 @@ export async function GET(request: Request) {
           "Đang xử lý": pending,
         });
       }
-    }
+    });
 
     // 5. Recent Activity (Filtered by task visibility)
-    const allComments: any[] = [];
-    for (const task of visibleTasks) {
-      const commentsRef = collection(db, "tasks", task.id, "comments");
-      const commentsSnapshot = await getDocs(commentsRef);
-      for (const cDoc of commentsSnapshot.docs) {
-        const cData = cDoc.data();
+    const recentActivity: any[] = [];
+    if (visibleTasks.length > 0) {
+      // Parallel fetch for comments
+      const commentsPromises = visibleTasks.map(task => getDocs(collection(db, "tasks", task.id, "comments")));
+      const commentsSnapshots = await Promise.all(commentsPromises);
+      
+      const allComments: any[] = [];
+      commentsSnapshots.forEach((snap, idx) => {
+        const task = visibleTasks[idx];
+        snap.docs.forEach(cDoc => {
+          const cData = cDoc.data();
+          allComments.push({
+            id: cDoc.id,
+            userId: cData.userId,
+            action: "đã bình luận trong",
+            target: `${task.taskCode}: ${task.title}`,
+            time: cData.createdAt,
+            createdAt: cData.createdAt,
+          });
+        });
+      });
+      
+      // Sort all comments to get top 5
+      allComments.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      const topComments = allComments.slice(0, 5);
+      
+      // Resolve user for top 5 only
+      const userResolvers = topComments.map(async (comment) => {
         let commentUser = null;
-        if (cData.userId) {
-          const uDoc = await getDoc(doc(db, "users", cData.userId));
+        if (comment.userId) {
+          const uDoc = await getDoc(doc(db, "users", comment.userId));
           if (uDoc.exists()) commentUser = uDoc.data();
         }
-        allComments.push({
-          id: cDoc.id,
+        return {
+          ...comment,
           user: commentUser ? commentUser.fullName : "Thành viên",
           avatar: commentUser ? commentUser.avatarUrl : null,
-          action: "đã bình luận trong",
-          target: `${task.taskCode}: ${task.title}`,
-          time: cData.createdAt,
-          createdAt: cData.createdAt,
-        });
-      }
-    }
-
-    allComments.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    const recentActivity = allComments.slice(0, 5);
-
-    // Fallback activity if no comments exist
-    if (recentActivity.length === 0) {
-      recentActivity.push(
-        {
-          id: "act-1",
-          user: "Nguyễn Văn A",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-          action: "đã tạo dự án mới",
-          target: "MeTask Development",
-          time: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: "act-2",
-          user: "Trần Thị B",
-          avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-          action: "đã chuyển trạng thái TASK-4092 sang",
-          target: "In Progress",
-          time: new Date(Date.now() - 7200000).toISOString(),
-        }
-      );
+        };
+      });
+      
+      const resolvedActivity = await Promise.all(userResolvers);
+      recentActivity.push(...resolvedActivity);
     }
 
     // 6. My Tasks (Các task chưa hoàn thành được giao cho User hiện tại)
     const myTasksRaw = visibleTasks.filter((t) => t.assigneeId === currentUserId && t.status !== "Completed");
     
     // Resolve project, module, and feature details for myTasks
-    const myTasks: any[] = [];
-    for (const task of myTasksRaw) {
+    const myTasksPromises = myTasksRaw.map(async (task) => {
       let project = null;
-      const pDoc = await getDoc(doc(db, "projects", task.projectId));
-      if (pDoc.exists()) project = pDoc.data();
-
       let module = null;
-      if (task.moduleId) {
-        const mDoc = await getDoc(doc(db, "modules", task.moduleId));
-        if (mDoc.exists()) module = mDoc.data();
-      }
-
       let feature = null;
-      if (task.featureId) {
-        const fDoc = await getDoc(doc(db, "features", task.featureId));
-        if (fDoc.exists()) feature = fDoc.data();
-      }
 
-      myTasks.push({
+      const pDocPromise = getDoc(doc(db, "projects", task.projectId));
+      const mDocPromise = task.moduleId ? getDoc(doc(db, "modules", task.moduleId)) : Promise.resolve(null);
+      const fDocPromise = task.featureId ? getDoc(doc(db, "features", task.featureId)) : Promise.resolve(null);
+
+      const [pDoc, mDoc, fDoc] = await Promise.all([pDocPromise, mDocPromise, fDocPromise]);
+
+      if (pDoc.exists()) project = pDoc.data();
+      if (mDoc && mDoc.exists()) module = mDoc.data();
+      if (fDoc && fDoc.exists()) feature = fDoc.data();
+
+      return {
         ...task,
         project,
         module,
         feature
-      });
-    }
+      };
+    });
+
+    const myTasks = await Promise.all(myTasksPromises);
 
     // Sort by dueDate asc
     myTasks.sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());

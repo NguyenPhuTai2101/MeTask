@@ -11,7 +11,9 @@ export interface SessionPayload {
   email: string;
   fullName: string;
   avatarUrl: string | null;
-  role: string;
+  role?: string;
+  systemRole?: string;
+  status?: string;
 }
 
 export function encryptSession(data: SessionPayload): string {
@@ -58,4 +60,14 @@ export function hashPassword(password: string): string {
 
 export function verifyPassword(password: string, storedHash: string): boolean {
   return hashPassword(password) === storedHash;
+}
+
+export async function getSessionUser(): Promise<SessionPayload | null> {
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("metask_session")?.value;
+  if (sessionCookie) {
+    return decryptSession(sessionCookie);
+  }
+  return null;
 }

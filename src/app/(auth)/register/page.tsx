@@ -11,7 +11,6 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("Member");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,7 +29,8 @@ export default function RegisterPage() {
 
     setError(null);
     setSubmitting(true);
-    const result = await register(email, fullName, password, role);
+    // Role is unused in global Auth scope
+    const result = await register(email, fullName, password);
     setSubmitting(false);
 
     if (!result.success) {
@@ -127,32 +127,6 @@ export default function RegisterPage() {
                 className="w-full h-full px-3 text-xs text-slate-700 bg-transparent border-0 outline-none"
                 required
               />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-slate-500" htmlFor="role">
-              Vai trò chính của bạn
-            </label>
-            <div className="relative flex items-center h-10 w-full rounded-lg bg-slate-50 border border-[#cfdaf2] focus-within:border-primary focus-within:bg-white transition-all duration-200">
-              <span className="material-symbols-outlined ml-3 text-[18px] text-slate-400 select-none">
-                badge
-              </span>
-              <select
-                id="role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full h-full px-3 text-xs text-slate-700 bg-transparent border-0 outline-none appearance-none"
-              >
-                <option value="Project Manager">Project Manager (Quản lý Dự án)</option>
-                <option value="Lead Designer">Lead Designer (Thiết kế trưởng)</option>
-                <option value="Frontend Developer">Frontend Developer (Lập trình Frontend)</option>
-                <option value="Backend Developer">Backend Developer (Lập trình Backend)</option>
-                <option value="Member">Member (Thành viên đội ngũ)</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-3 text-[18px] text-slate-400 pointer-events-none">
-                expand_more
-              </span>
             </div>
           </div>
 

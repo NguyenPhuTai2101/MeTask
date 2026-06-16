@@ -3,16 +3,19 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: "space_dashboard" },
-  { label: "Kanban", href: "/board", icon: "view_kanban" },
-  { label: "Workload", href: "/workload", icon: "group" },
-  { label: "Cấu hình", href: "/settings", icon: "settings" },
-];
+import { useAuth } from "@/context/AuthContext";
 
 export default function BottomNavBar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const navItems = [
+    { label: "Dashboard", href: "/dashboard", icon: "space_dashboard" },
+    { label: "Kanban", href: "/board", icon: "view_kanban" },
+    { label: "Workload", href: "/workload", icon: "group" },
+    ...(user?.systemRole === "Admin" ? [{ label: "Admin", href: "/admin", icon: "admin_panel_settings" }] : []),
+    { label: "Cấu hình", href: "/settings", icon: "settings" },
+  ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 h-16 border-t border-[#cfdaf2] bg-white flex items-center justify-around px-2 pb-safe z-40 lg:hidden shadow-lg shadow-slate-900/10">

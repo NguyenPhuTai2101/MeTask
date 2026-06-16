@@ -9,14 +9,16 @@ export interface UserSession {
   email: string;
   fullName: string;
   avatarUrl: string | null;
-  role: string;
+  role?: string;
+  systemRole?: string;
+  status?: string;
 }
 
 interface AuthContextType {
   user: UserSession | null;
   loading: boolean;
   login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, fullName: string, password?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, fullName: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -104,8 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (
     email: string,
     fullName: string,
-    password = "password123",
-    role = "Member"
+    password = "password123"
   ): Promise<{ success: boolean; error?: string }> => {
     setLoading(true);
     try {
@@ -120,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email, fullName, role }),
+        body: JSON.stringify({ token, email, fullName }),
       });
       
       const data = await res.json();

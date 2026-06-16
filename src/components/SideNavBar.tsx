@@ -11,19 +11,20 @@ interface SideNavBarProps {
   onClose: () => void;
 }
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: "space_dashboard" },
-  { label: "Bảng Công Việc", href: "/board", icon: "view_kanban" },
-  { label: "Dự Án & Đội Ngũ", href: "/projects", icon: "folder_open" },
-  { label: "Lịch Biểu & Gantt", href: "/calendar", icon: "calendar_month" },
-  { label: "Tải Trọng Đội Ngũ", href: "/workload", icon: "group" },
-  { label: "Cài Đặt PWA", href: "/settings", icon: "settings" },
-];
-
 export default function SideNavBar({ isOpen, onClose }: SideNavBarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { isInstallable, triggerInstall } = usePWAInstall();
+
+  const navItems = [
+    { label: "Dashboard", href: "/dashboard", icon: "space_dashboard" },
+    { label: "Bảng Công Việc", href: "/board", icon: "view_kanban" },
+    { label: "Dự Án & Đội Ngũ", href: "/projects", icon: "folder_open" },
+    { label: "Lịch Biểu & Gantt", href: "/calendar", icon: "calendar_month" },
+    { label: "Tải Trọng Đội Ngũ", href: "/workload", icon: "group" },
+    ...(user?.systemRole === "Admin" ? [{ label: "Quản Trị Hệ Thống", href: "/admin", icon: "admin_panel_settings" }] : []),
+    { label: "Cài Đặt PWA", href: "/settings", icon: "settings" },
+  ];
   
   // Local state for standalone mode and instructions popup
   const [isStandalone, setIsStandalone] = useState(false);

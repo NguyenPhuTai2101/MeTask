@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebase-admin";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { encryptSession } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -33,27 +33,14 @@ export async function POST(request: Request) {
 
     const userData = userDoc.data();
 
-    // 3. Find user's role from projects
-    const projectsRef = collection(db, "projects");
-    const q = query(projectsRef, where("memberIds", "array-contains", uid));
-    const projectDocs = await getDocs(q);
-
-    let role = "Member";
-    if (!projectDocs.empty) {
-      const proj = projectDocs.docs[0].data();
-      const member = proj.members?.find((m: any) => m.userId === uid);
-      if (member) {
-        role = member.role;
-      }
-    }
-
     // 4. Create session token using encryptSession
     const sessionToken = encryptSession({
       userId: uid,
       email: userData.email,
       fullName: userData.fullName,
       avatarUrl: userData.avatarUrl || null,
-      role,
+      systemRole: userData.systemRole || "User",
+      status: userData.status || "active",
     });
 
     // 5. Set session cookie
@@ -73,7 +60,8 @@ export async function POST(request: Request) {
         email: userData.email,
         fullName: userData.fullName,
         avatarUrl: userData.avatarUrl || null,
-        role,
+        systemRole: userData.systemRole || "User",
+        status: userData.status || "active",
       },
     });
   } catch (error) {

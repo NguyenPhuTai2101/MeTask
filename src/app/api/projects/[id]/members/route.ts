@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { cookies } from "next/headers";
+import { getSessionUser } from "@/lib/session";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    let authenticatedUserId: string | null = null;
+    const payload = await getSessionUser();
+    if (payload) {
+      authenticatedUserId = payload.userId;
+    }
+
+    if (!authenticatedUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id: projectId } = await params;
     const { userId, role, workloadPercentage } = await request.json();
 
@@ -24,6 +36,12 @@ export async function POST(
     const projectData = projectDoc.data();
     const members = projectData.members || [];
     const memberIds = projectData.memberIds || [];
+
+    // Check if authenticated user is a Project Manager
+    const authUserMember = members.find((m: any) => m.userId === authenticatedUserId);
+    if (!authUserMember || authUserMember.role !== "Project Manager") {
+      return NextResponse.json({ error: "Only Project Managers can modify team members" }, { status: 403 });
+    }
 
     const existingMemberIndex = members.findIndex((m: any) => m.userId === userId);
     let updatedMember: any = null;
@@ -77,6 +95,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    let authenticatedUserId: string | null = null;
+    const payload = await getSessionUser();
+    if (payload) {
+      authenticatedUserId = payload.userId;
+    }
+
+    if (!authenticatedUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id: projectId } = await params;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
@@ -95,6 +123,12 @@ export async function DELETE(
     const projectData = projectDoc.data();
     let members = projectData.members || [];
     let memberIds = projectData.memberIds || [];
+
+    // Check if authenticated user is a Project Manager
+    const authUserMember = members.find((m: any) => m.userId === authenticatedUserId);
+    if (!authUserMember || authUserMember.role !== "Project Manager") {
+      return NextResponse.json({ error: "Only Project Managers can remove team members" }, { status: 403 });
+    }
 
     members = members.filter((m: any) => m.userId !== userId);
     memberIds = memberIds.filter((id: string) => id !== userId);

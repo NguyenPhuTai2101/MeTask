@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
-import { decryptSession } from "@/lib/session";
+import { getSessionUser } from "@/lib/session";
 
 export async function GET(
   request: Request,
@@ -10,12 +10,7 @@ export async function GET(
 ) {
   try {
     const { id: taskId } = await params;
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("metask_session")?.value;
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
-    }
-    const session = decryptSession(sessionCookie);
+    const session = await getSessionUser();
     if (!session) {
       return NextResponse.json({ error: "Phiên làm việc hết hạn" }, { status: 401 });
     }
@@ -92,12 +87,7 @@ export async function POST(
 ) {
   try {
     const { id: taskId } = await params;
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("metask_session")?.value;
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
-    }
-    const session = decryptSession(sessionCookie);
+    const session = await getSessionUser();
     if (!session) {
       return NextResponse.json({ error: "Phiên làm việc hết hạn" }, { status: 401 });
     }

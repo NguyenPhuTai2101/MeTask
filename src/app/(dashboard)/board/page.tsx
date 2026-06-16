@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { DndContext, useDroppable, useDraggable, DragEndEvent } from "@dnd-kit/core";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import { useAuth } from "@/context/AuthContext";
+import SearchableSelect from "@/components/SearchableSelect";
 import {
   isOnline,
   setOfflineCache,
@@ -665,18 +666,17 @@ export default function KanbanBoard() {
                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
                   Giao cho (Assignee)
                 </label>
-                <select
+                <SearchableSelect
                   value={createForm.assigneeId}
-                  onChange={(e) => setCreateForm({ ...createForm, assigneeId: e.target.value })}
-                  className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700"
-                >
-                  <option value="">Chưa gán</option>
-                  {selectedProject.members.map((m) => (
-                    <option key={m.user.id} value={m.user.id}>
-                      {m.user.fullName}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setCreateForm({ ...createForm, assigneeId: val })}
+                  placeholder="Chọn người thực hiện..."
+                  options={selectedProject.members.map((m: any) => ({
+                    value: m.user?.id,
+                    label: m.user?.fullName,
+                    subLabel: m.user?.email,
+                    avatarUrl: m.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"
+                  }))}
+                />
               </div>
 
               <button

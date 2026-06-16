@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { decryptSession } from "@/lib/session";
+import { getSessionUser } from "@/lib/session";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("metask_session")?.value;
-
-    if (!sessionCookie) {
-      return NextResponse.json({ user: null });
-    }
-
-    const payload = decryptSession(sessionCookie);
+    const payload = await getSessionUser();
 
     if (!payload) {
       return NextResponse.json({ user: null });
     }
 
-    return NextResponse.json({ user: payload });
+    return NextResponse.json({ 
+      user: {
+        id: payload.userId,
+        email: payload.email,
+        fullName: payload.fullName,
+        avatarUrl: payload.avatarUrl,
+        systemRole: payload.systemRole || "User",
+        status: payload.status || "active",
+        role: payload.role
+      } 
+    });
   } catch (error) {
     console.error("Session fetch error:", error);
     return NextResponse.json(

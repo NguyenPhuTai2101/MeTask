@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
 interface User {
@@ -181,9 +182,10 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {projects.map((project) => (
-            <div
+            <Link
+              href={`/projects/${project.id}`}
               key={project.id}
-              className="bg-white border border-[#cfdaf2] rounded-xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md hover:border-slate-300 transition-all duration-200"
+              className="bg-white border border-[#cfdaf2] rounded-xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer block"
             >
               <div>
                 <div className="flex items-start justify-between mb-3">
@@ -208,12 +210,12 @@ export default function ProjectsPage() {
                     {project.members.map((member) => (
                       <div
                         key={member.userId}
-                        title={`${member.user.fullName} (${member.role} - ${member.workloadPercentage}%)`}
+                        title={`${member.user?.fullName || 'Ai đó'} (${member.role} - ${member.workloadPercentage}%)`}
                         className="relative group"
                       >
                         <img
-                          src={member.user.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"}
-                          alt={member.user.fullName}
+                          src={member.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"}
+                          alt={member.user?.fullName || 'Ai đó'}
                           className="w-7 h-7 rounded-full object-cover border border-slate-100 ring-2 ring-slate-50"
                         />
                         {member.workloadPercentage > 100 && (
@@ -227,15 +229,12 @@ export default function ProjectsPage() {
 
               {/* Card Footer Actions */}
               <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveProject(project)}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-[#cfdaf2] text-slate-700 font-semibold text-xs py-2 rounded-lg transition-all"
-                >
-                  <span className="material-symbols-outlined text-[16px]">group</span>
-                  Thành Viên
-                </button>
+                <div className="flex-1 flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-[#cfdaf2] text-slate-700 font-semibold text-xs py-2 rounded-lg transition-all">
+                  Chi tiết Dự án
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
@@ -291,136 +290,6 @@ export default function ProjectsPage() {
                 {creating ? "Đang tạo..." : "Xác Nhận Tạo"}
               </button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Manage Members */}
-      {activeProject && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#cfdaf2] rounded-xl shadow-2xl max-w-2xl w-full p-6 animate-scale-up max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="font-bold text-base text-[#111c2d]">
-                  Quản lý Đội ngũ: {activeProject.name}
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">Thêm thành viên và quản lý tải công suất của họ.</p>
-              </div>
-              <button
-                onClick={() => setActiveProject(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
-              >
-                <span className="material-symbols-outlined block text-[22px]">close</span>
-              </button>
-            </div>
-
-            {/* List current members */}
-            <div className="mb-6">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-                Thành viên hiện tại
-              </h4>
-              <div className="flex flex-col gap-2">
-                {activeProject.members.map((member) => (
-                  <div
-                    key={member.userId}
-                    className="flex items-center justify-between p-3 border border-slate-100 bg-slate-50/50 rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={member.user.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"}
-                        alt={member.user.fullName}
-                        className="w-8 h-8 rounded-full object-cover border border-white shadow-sm"
-                      />
-                      <div>
-                        <p className="text-xs font-semibold text-[#111c2d]">{member.user.fullName}</p>
-                        <p className="text-[10px] text-slate-400">{member.user.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <span className="text-[10px] bg-blue-50 text-primary px-2 py-0.5 rounded font-bold">
-                          {member.role}
-                        </span>
-                        <p className="text-[10px] text-slate-500 mt-1">
-                          Tải trọng: <span className="font-bold">{member.workloadPercentage}%</span>
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveMember(member.userId)}
-                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Xóa khỏi dự án"
-                      >
-                        <span className="material-symbols-outlined block text-[18px]">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Add new member form */}
-            <div className="border-t border-slate-100 pt-5">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                Thêm thành viên mới
-              </h4>
-              <form onSubmit={handleAddMember} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-semibold text-slate-500">Chọn Nhân Sự</label>
-                  <select
-                    value={selectedUser}
-                    onChange={(e) => setSelectedUser(e.target.value)}
-                    className="h-9 w-full rounded-lg bg-slate-50 border border-[#cfdaf2] px-2 text-xs outline-none focus:border-primary"
-                    required
-                  >
-                    <option value="">Chọn một người...</option>
-                    {users
-                      .filter((u) => !activeProject.members.some((m) => m.userId === u.id))
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName} ({u.email})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-semibold text-slate-500">Vai Trò</label>
-                  <select
-                    value={memberRole}
-                    onChange={(e) => setMemberRole(e.target.value)}
-                    className="h-9 w-full rounded-lg bg-slate-50 border border-[#cfdaf2] px-2 text-xs outline-none focus:border-primary"
-                  >
-                    <option value="Project Manager">Project Manager</option>
-                    <option value="Lead Designer">Lead Designer</option>
-                    <option value="Frontend Developer">Frontend Developer</option>
-                    <option value="Backend Developer">Backend Developer</option>
-                    <option value="Member">Member</option>
-                  </select>
-                </div>
-
-                <div className="flex gap-2">
-                  <div className="flex-1 flex flex-col gap-1">
-                    <label className="text-[10px] font-semibold text-slate-500">Tải dự kiến (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="200"
-                      value={memberWorkload}
-                      onChange={(e) => setMemberWorkload(e.target.value)}
-                      className="h-9 w-full rounded-lg bg-slate-50 border border-[#cfdaf2] px-2 text-xs outline-none focus:border-primary"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={managing}
-                    className="h-9 bg-primary hover:bg-blue-700 text-white font-semibold text-xs px-4 rounded-lg shadow-sm flex items-center justify-center gap-1 transition-all"
-                  >
-                    {managing ? "Đang thêm..." : "Thêm"}
-                  </button>
-                </div>
-              </form>
-            </div>
           </div>
         </div>
       )}

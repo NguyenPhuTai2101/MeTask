@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import SearchableSelect from "./SearchableSelect";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useAuth } from "@/context/AuthContext";
@@ -106,6 +107,8 @@ export default function TaskDetailModal({
     },
   });
 
+  const [projectModules, setProjectModules] = useState<any[]>([]);
+
   // Fetch task details and time logs when taskId changes
   useEffect(() => {
     if (!taskId || !isOpen) return;
@@ -119,6 +122,13 @@ export default function TaskDetailModal({
           setTask(found);
           if (editor) {
             editor.commands.setContent(found.description || "");
+          }
+
+          // Fetch project to get modules and features
+          const projRes = await fetch(`/api/projects/${found.projectId}`);
+          if (projRes.ok) {
+            const projData = await projRes.json();
+            setProjectModules(projData.modules || []);
           }
         }
         fetchTimeLogs();
@@ -338,7 +348,7 @@ export default function TaskDetailModal({
       <div className="relative w-full max-w-2xl h-full bg-white shadow-2xl flex flex-col z-10 animate-slide-in">
         {/* Header Section */}
         <div className="h-16 px-6 border-b border-[#cfdaf2] flex items-center justify-between bg-slate-50/50">
-          <div className="flex flex-col">
+          <div className="flex flex-col w-full max-w-xl pr-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-sans font-semibold text-slate-400 tracking-wider uppercase">
                 {task.project?.name || "Dự án"} / {task.taskCode}
@@ -349,16 +359,44 @@ export default function TaskDetailModal({
                 </span>
               )}
             </div>
-            <h2 className="text-sm font-bold text-[#111c2d] truncate max-w-md mt-0.5">
-              {task.title}
-            </h2>
+            <input
+              type="text"
+              value={task.title}
+              onChange={(e) => setTask(prev => prev ? { ...prev, title: e.target.value } : null)}
+              onBlur={(e) => updateTaskField({ title: e.target.value })}
+              className="text-sm font-bold text-[#111c2d] truncate max-w-md mt-0.5 bg-transparent border-none outline-none focus:ring-1 focus:ring-primary focus:bg-white rounded px-1 -ml-1 transition-all"
+            />
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 -mr-2 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
-          >
-            <span className="material-symbols-outlined block text-[22px]">close</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {currentUser?.id === task.reporterId || projectMembers.some(m => m.user.id === currentUser?.id && m.role === "Project Manager") ? (
+              <button
+                onClick={async () => {
+                  if (!confirm("BẠN CÓ CHẮC CHẮN MUỐN XÓA TÁC VỤ NÀY KHÔNG?")) return;
+                  try {
+                    const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
+                    if (res.ok) {
+                      onClose();
+                      onTaskUpdated();
+                    } else {
+                      alert("Lỗi xóa tác vụ");
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors"
+                title="Xóa Tác vụ"
+              >
+                <span className="material-symbols-outlined block text-[20px]">delete</span>
+              </button>
+            ) : null}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+            >
+              <span className="material-symbols-outlined block text-[22px]">close</span>
+            </button>
+          </div>
         </div>
 
         {/* Content Section */}
@@ -372,19 +410,53 @@ export default function TaskDetailModal({
               {/* Metadata Grid */}
               <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 border border-[#cfdaf2]/50 text-xs">
                 <div>
-                  <label className="block text-slate-400 font-medium mb-1.5">Người Thực Hiện</label>
+                  <label className="block text-slate-400 font-medium mb-1.5">Phân hệ (Module)</label>
                   <select
-                    value={task.assignee?.id || ""}
-                    onChange={(e) => updateTaskField({ assigneeId: e.target.value || null })}
+                    value={task.moduleId || ""}
+                    onChange={(e) => updateTaskField({ moduleId: e.target.value || null, featureId: null })}
                     className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none font-medium text-slate-700"
                   >
-                    <option value="">Chưa gán</option>
-                    {projectMembers.map((m) => (
-                      <option key={m.user.id} value={m.user.id}>
-                        {m.user.fullName}
+                    <option value="">Không có</option>
+                    {projectModules.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-medium mb-1.5">Chức năng (Feature)</label>
+                  <select
+                    value={task.featureId || ""}
+                    onChange={(e) => updateTaskField({ featureId: e.target.value || null })}
+                    disabled={!task.moduleId}
+                    className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none font-medium text-slate-700 disabled:opacity-50 disabled:bg-slate-100"
+                  >
+                    <option value="">Không có</option>
+                    {projectModules
+                      .find((m) => m.id === task.moduleId)
+                      ?.features?.map((f: any) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 font-medium mb-1.5">Người Thực Hiện</label>
+                  <SearchableSelect
+                    value={task.assignee?.id || ""}
+                    onChange={(val) => updateTaskField({ assigneeId: val || null })}
+                    placeholder="Chọn nhân sự..."
+                    options={projectMembers.map((m: any) => ({
+                      value: m.user?.id,
+                      label: m.user?.fullName,
+                      subLabel: m.user?.email,
+                      avatarUrl: m.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"
+                    }))}
+                  />
                 </div>
 
                 <div>

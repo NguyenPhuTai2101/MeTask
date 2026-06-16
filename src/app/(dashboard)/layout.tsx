@@ -17,8 +17,12 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
+    if (!loading) {
+      if (!user) {
+        router.push("/login");
+      } else if (user.status === "pending") {
+        router.push("/pending-approval");
+      }
     }
   }, [user, loading, router]);
 

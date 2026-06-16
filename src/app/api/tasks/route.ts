@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, setDoc, getDoc } from "firebase/firestore";
 import { cookies } from "next/headers";
-import { decryptSession } from "@/lib/session";
+import { getSessionUser } from "@/lib/session";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -10,14 +10,9 @@ export async function GET(request: Request) {
 
   try {
     let authenticatedUserId: string | null = null;
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("metask_session")?.value;
-    
-    if (sessionCookie) {
-      const payload = decryptSession(sessionCookie);
-      if (payload) {
-        authenticatedUserId = payload.userId;
-      }
+    const payload = await getSessionUser();
+    if (payload) {
+      authenticatedUserId = payload.userId;
     }
 
     if (!authenticatedUserId) {
