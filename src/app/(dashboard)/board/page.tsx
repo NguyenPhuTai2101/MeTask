@@ -31,6 +31,7 @@ interface Feature {
   id: string;
   name: string;
   description: string | null;
+  parentFeatureId?: string | null;
 }
 
 interface Module {
@@ -283,6 +284,7 @@ export default function KanbanBoard() {
             status: "Backlog",
             assigneeId: "",
             moduleId: "",
+            parentFeatureId: "",
             featureId: "",
             dueDate: "",
           });
