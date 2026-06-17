@@ -347,25 +347,40 @@ export default function TaskDetailModal({
       {/* Drawer Panel */}
       <div className="relative w-full max-w-2xl h-full bg-white shadow-2xl flex flex-col z-10 animate-slide-in">
         {/* Header Section */}
-        <div className="h-16 px-6 border-b border-[#cfdaf2] flex items-center justify-between bg-slate-50/50">
-          <div className="flex flex-col w-full max-w-xl pr-4">
+        <div className="min-h-[64px] py-3 px-6 border-b border-[#cfdaf2] flex items-start justify-between bg-slate-50/50">
+          <div className="flex flex-col w-full max-w-xl pr-4 gap-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-sans font-semibold text-slate-400 tracking-wider uppercase">
+              <span className="text-[10px] font-mono font-semibold text-slate-400 tracking-wider uppercase">
                 {task.project?.name || "Dự án"} / {task.taskCode}
               </span>
-              {(task.module || task.feature) && (
-                <span className="text-[9px] font-bold text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded leading-none border border-blue-100/70">
-                  {task.module?.name} {task.feature ? `/ ${task.feature.name}` : ""}
-                </span>
-              )}
             </div>
             <input
               type="text"
               value={task.title}
               onChange={(e) => setTask(prev => prev ? { ...prev, title: e.target.value } : null)}
               onBlur={(e) => updateTaskField({ title: e.target.value })}
-              className="text-sm font-bold text-[#111c2d] truncate max-w-md mt-0.5 bg-transparent border-none outline-none focus:ring-1 focus:ring-primary focus:bg-white rounded px-1 -ml-1 transition-all"
+              className="text-[16px] font-bold text-[#111c2d] truncate max-w-md bg-transparent border-none outline-none focus:ring-1 focus:ring-primary focus:bg-white rounded px-1 -ml-1 transition-all"
             />
+            {(task.module || task.feature) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                {task.module && (
+                  <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 max-w-full overflow-hidden shadow-sm">
+                    <span className="material-symbols-outlined text-[13px] text-blue-500 shrink-0">folder_open</span>
+                    <span className="truncate" title={task.module.name}>
+                      {task.module.name}
+                    </span>
+                  </div>
+                )}
+                {task.feature && (
+                  <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 max-w-full overflow-hidden shadow-sm">
+                    <span className="material-symbols-outlined text-[13px] text-teal-500 shrink-0">extension</span>
+                    <span className="truncate" title={task.feature.name}>
+                      {task.feature.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {currentUser?.id === task.reporterId || projectMembers.some(m => m.user.id === currentUser?.id && m.role === "Project Manager") ? (

@@ -101,7 +101,9 @@ export default function KanbanBoard() {
     status: "Backlog",
     assigneeId: "",
     moduleId: "",
+    parentFeatureId: "",
     featureId: "",
+    dueDate: "",
   });
 
   // Track online status & triggers sync
@@ -253,12 +255,15 @@ export default function KanbanBoard() {
     e.preventDefault();
     if (!createForm.title.trim() || !selectedProject) return;
 
+    const finalFeatureId = createForm.featureId || createForm.parentFeatureId || null;
+
     const requestBody = {
       ...createForm,
       projectId: selectedProject.id,
       reporterId: selectedProject.members[0]?.user.id,
       moduleId: createForm.moduleId || null,
-      featureId: createForm.featureId || null,
+      featureId: finalFeatureId,
+      dueDate: createForm.dueDate || null,
     };
 
     if (isOnline()) {
@@ -279,6 +284,7 @@ export default function KanbanBoard() {
             assigneeId: "",
             moduleId: "",
             featureId: "",
+            dueDate: "",
           });
           showNotification("Tác vụ mới", {
             body: `Đã tạo thành công tác vụ: ${requestBody.title}`,
@@ -307,9 +313,9 @@ export default function KanbanBoard() {
         comments: [],
         projectId: selectedProject.id,
         moduleId: createForm.moduleId || null,
-        featureId: createForm.featureId || null,
+        featureId: finalFeatureId,
         module: createForm.moduleId ? { id: createForm.moduleId, name: selectedProject.modules.find(m => m.id === createForm.moduleId)?.name || "" } : null,
-        feature: createForm.featureId ? { id: createForm.featureId, name: selectedProject.modules.find(m => m.id === createForm.moduleId)?.features.find(f => f.id === createForm.featureId)?.name || "" } : null,
+        feature: finalFeatureId ? { id: finalFeatureId, name: selectedProject.modules.find(m => m.id === createForm.moduleId)?.features.find(f => f.id === finalFeatureId)?.name || "" } : null,
       };
       
       const newTasks = [...tasks, tempTask];
@@ -324,7 +330,9 @@ export default function KanbanBoard() {
         status: "Backlog",
         assigneeId: "",
         moduleId: "",
+        parentFeatureId: "",
         featureId: "",
+        dueDate: "",
       });
       showNotification("Tác vụ ngoại tuyến", {
         body: `Đã lưu tạm tác vụ: ${createForm.title} (Sẽ đồng bộ khi có mạng)`,
@@ -589,14 +597,14 @@ export default function KanbanBoard() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
                     Phân hệ (Module)
                   </label>
                   <select
                     value={createForm.moduleId}
-                    onChange={(e) => setCreateForm({ ...createForm, moduleId: e.target.value, featureId: "" })}
+                    onChange={(e) => setCreateForm({ ...createForm, moduleId: e.target.value, parentFeatureId: "", featureId: "" })}
                     className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700"
                   >
                     <option value="">Không có</option>
@@ -608,25 +616,50 @@ export default function KanbanBoard() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
-                    Chức năng (Feature)
-                  </label>
-                  <select
-                    value={createForm.featureId}
-                    onChange={(e) => setCreateForm({ ...createForm, featureId: e.target.value })}
-                    disabled={!createForm.moduleId}
-                    className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Không có</option>
-                    {selectedProject.modules
-                      ?.find((m) => m.id === createForm.moduleId)
-                      ?.features?.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
+                      Chức năng cha
+                    </label>
+                    <select
+                      value={createForm.parentFeatureId}
+                      onChange={(e) => setCreateForm({ ...createForm, parentFeatureId: e.target.value, featureId: "" })}
+                      disabled={!createForm.moduleId}
+                      className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Không có</option>
+                      {selectedProject.modules
+                        ?.find((m) => m.id === createForm.moduleId)
+                        ?.features?.filter((f) => !f.parentFeatureId)
+                        .map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
+                      Chức năng con
+                    </label>
+                    <select
+                      value={createForm.featureId}
+                      onChange={(e) => setCreateForm({ ...createForm, featureId: e.target.value })}
+                      disabled={!createForm.parentFeatureId}
+                      className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Không có</option>
+                      {selectedProject.modules
+                        ?.find((m) => m.id === createForm.moduleId)
+                        ?.features?.filter((f) => f.parentFeatureId === createForm.parentFeatureId)
+                        .map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -662,21 +695,34 @@ export default function KanbanBoard() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
-                  Giao cho (Assignee)
-                </label>
-                <SearchableSelect
-                  value={createForm.assigneeId}
-                  onChange={(val) => setCreateForm({ ...createForm, assigneeId: val })}
-                  placeholder="Chọn người thực hiện..."
-                  options={selectedProject.members.map((m: any) => ({
-                    value: m.user?.id,
-                    label: m.user?.fullName,
-                    subLabel: m.user?.email,
-                    avatarUrl: m.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"
-                  }))}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
+                    Giao cho (Assignee)
+                  </label>
+                  <SearchableSelect
+                    value={createForm.assigneeId}
+                    onChange={(val) => setCreateForm({ ...createForm, assigneeId: val })}
+                    placeholder="Chọn người thực hiện..."
+                    options={selectedProject.members.map((m: any) => ({
+                      value: m.user?.id,
+                      label: m.user?.fullName,
+                      subLabel: m.user?.email,
+                      avatarUrl: m.user?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"
+                    }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">
+                    Ngày hết hạn
+                  </label>
+                  <input
+                    type="date"
+                    value={createForm.dueDate}
+                    onChange={(e) => setCreateForm({ ...createForm, dueDate: e.target.value })}
+                    className="w-full bg-white border border-[#cfdaf2] rounded-lg p-2 outline-none text-slate-700"
+                  />
+                </div>
               </div>
 
               <button
@@ -807,20 +853,36 @@ function TaskCard({ task, onClick }: CardProps) {
         </div>
       </div>
 
-      <div onClick={onClick} className="cursor-pointer group flex flex-col gap-1">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-mono text-slate-400 font-bold leading-none">
+      <div onClick={onClick} className="cursor-pointer group flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider">
             {task.taskCode}
           </span>
-          {(task.module || task.feature) && (
-            <span className="text-[9px] font-bold text-blue-600 bg-blue-50/80 px-1.5 py-0.5 rounded leading-none border border-blue-100/70">
-              {task.module?.name} {task.feature ? `/ ${task.feature.name}` : ""}
-            </span>
-          )}
+          <h4 className="font-semibold text-[15px] text-[#111c2d] leading-snug group-hover:text-primary transition-colors">
+            {task.title}
+          </h4>
         </div>
-        <h4 className="font-bold text-sm text-[#111c2d] leading-snug group-hover:text-primary transition-colors mt-1">
-          {task.title}
-        </h4>
+
+        {(task.module || task.feature) && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+            {task.module && (
+              <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-1.5 py-0.5 max-w-full overflow-hidden">
+                <span className="material-symbols-outlined text-[13px] text-blue-500 shrink-0">folder_open</span>
+                <span className="truncate" title={task.module.name}>
+                  {task.module.name}
+                </span>
+              </div>
+            )}
+            {task.feature && (
+              <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-1.5 py-0.5 max-w-full overflow-hidden">
+                <span className="material-symbols-outlined text-[13px] text-teal-500 shrink-0">extension</span>
+                <span className="truncate" title={task.feature.name}>
+                  {task.feature.name}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-slate-50 pt-2.5 text-xs text-slate-400">
